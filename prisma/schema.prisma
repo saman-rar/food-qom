@@ -1,0 +1,171 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  username      String    @unique
+  email         String?   @unique
+  passwordHash  String
+  fullName      String
+  role          String    @default("USER")
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  wallet        Wallet?
+  reservations  Reservation[]
+  sentTransfers Transfer[]  @relation("SentTransfers")
+  receivedTransfers Transfer[] @relation("ReceivedTransfers")
+  transactions  WalletTransaction[]
+  payments      Payment[]
+  adminLogs     AdminAuditLog[]
+  originalReservations Reservation[] @relation("OriginalUser")
+
+  @@map("users")
+}
+
+model Wallet {
+  id        String    @id @default(cuid())
+  userId    String    @unique
+  balance   Int       @default(0)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions WalletTransaction[]
+
+  @@map("wallets")
+}
+
+model Food {
+  id          String     @id @default(cuid())
+  name        String
+  description String?
+  imageUrl    String?
+  price       Int
+  category    String?
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  menuItems   MenuItem[]
+
+  @@map("foods")
+}
+
+model MenuItem {
+  id          String   @id @default(cuid())
+  foodId      String
+  date        DateTime
+  mealPeriod  String
+  isAvailable Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  food        Food     @relation(fields: [foodId], references: [id], onDelete: Cascade)
+  reservations Reservation[]
+
+  @@unique([foodId, date, mealPeriod])
+  @@map("menu_items")
+}
+
+model Reservation {
+  id            String    @id @default(cuid())
+  userId        String
+  menuItemId    String
+  status        String    @default("CONFIRMED")
+  isTransferred Boolean   @default(false)
+  originalUserId String?
+  transferredAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  menuItem      MenuItem  @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  originalUser  User?     @relation("OriginalUser", fields: [originalUserId], references: [id], onDelete: SetNull)
+  transfer      Transfer?
+
+  @@map("reservations")
+}
+
+model WalletTransaction {
+  id            String   @id @default(cuid())
+  userId        String
+  walletId      String
+  amount        Int
+  type          String
+  description   String
+  referenceId   String?
+  referenceType String?
+  status        String   @default("COMPLETED")
+  createdAt     DateTime @default(now())
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wallet        Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@map("wallet_transactions")
+}
+
+model Transfer {
+  id            String   @id @default(cuid())
+  senderId      String
+  recipientId   String
+  reservationId String   @unique
+  month         String
+  createdAt     DateTime @default(now())
+
+  sender        User     @relation("SentTransfers", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient     User     @relation("ReceivedTransfers", fields: [recipientId], references: [id], onDelete: Cascade)
+  reservation   Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+
+  @@map("transfers")
+}
+
+model Payment {
+  id            String   @id @default(cuid())
+  userId        String
+  amount        Int
+  status        String   @default("PENDING")
+  reference     String   @unique
+  gatewayResponse String?
+  createdAt     DateTime @default(now())
+  completedAt   DateTime?
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("payments")
+}
+
+model AdminAuditLog {
+  id          String   @id @default(cuid())
+  adminId     String
+  action      String
+  entityType  String
+  entityId    String
+  reason      String?
+  metadata    String?
+  createdAt   DateTime @default(now())
+
+  admin       User     @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@map("admin_audit_logs")
+}
+
+model SystemSettings {
+  id                  String   @id @default(cuid())
+  key                 String   @unique
+  value               String
+  description         String?
+  updatedAt           DateTime @updatedAt
+
+  @@map("system_settings")
+}
